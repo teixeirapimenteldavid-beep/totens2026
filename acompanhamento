@@ -1,0 +1,336 @@
+git remote add origin https://github.com/teixeirapimenteldavid-beep/totens2026.git
+ git branch -M main 
+git push -u origin main
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard PRO - Chamados Totem</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+</head>
+
+<body class="bg-gray-100 p-4">
+
+<h1 class="text-3xl font-bold mb-6 text-center">Dashboard Executivo - Totem de Senhas</h1>
+
+<!-- CARDS -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-white">
+
+  <div class="bg-blue-600 p-4 rounded shadow text-center">
+    <h2 class="text-lg font-semibold">Total Chamados</h2>
+    <p id="totalChamados" class="text-2xl font-bold">0</p>
+  </div>
+
+  <div class="bg-red-600 p-4 rounded shadow text-center">
+    <h2 class="text-lg font-semibold">SLA Estourado</h2>
+    <p id="slaEstourado" class="text-2xl font-bold">0</p>
+  </div>
+
+  <div class="bg-yellow-500 p-4 rounded shadow text-center">
+    <h2 class="text-lg font-semibold">Em Andamento</h2>
+    <p id="emAndamento" class="text-2xl font-bold">0</p>
+  </div>
+
+  <div class="bg-green-600 p-4 rounded shadow text-center">
+    <h2 class="text-lg font-semibold">Finalizados</h2>
+    <p id="finalizados" class="text-2xl font-bold">0</p>
+  </div>
+
+</div>
+
+<!-- FORMULÁRIO -->
+<div class="bg-white p-6 rounded shadow mb-6">
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+  <input type="text" id="loja" placeholder="Nome da Loja" class="border p-2 rounded w-full">
+  <input type="text" id="numero" placeholder="Número do Chamado" class="border p-2 rounded w-full">
+  <input type="date" id="data" class="border p-2 rounded w-full">
+
+  <select id="status" class="border p-2 rounded w-full">
+    <option value="Aberto">Aberto</option>
+    <option value="Em Andamento">Em Andamento</option>
+    <option value="Finalizado">Finalizado</option>
+  </select>
+
+  <input type="text" id="tratativa" placeholder="Tratativa" class="border p-2 rounded w-full">
+  <input type="file" id="foto" accept="image/*" class="border p-2 rounded w-full">
+
+</div>
+
+<div class="mt-4 flex gap-2 flex-wrap">
+  <button onclick="adicionarChamado()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+    Salvar Chamado
+  </button>
+
+  <button onclick="exportarExcel()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+    Exportar Excel
+  </button>
+</div>
+
+</div>
+
+<!-- FILTRO + PESQUISA -->
+<div class="mb-4 flex gap-2 flex-wrap items-center">
+  <input type="text" id="filtroPesquisa" placeholder="Pesquisar por loja ou chamado..."
+         class="border p-2 rounded w-full md:w-1/3">
+  <select id="filtroStatus" class="border p-2 rounded w-full md:w-1/6">
+    <option value="">Todos Status</option>
+    <option value="Aberto">Aberto</option>
+    <option value="Em Andamento">Em Andamento</option>
+    <option value="Finalizado">Finalizado</option>
+  </select>
+  <button onclick="pesquisarChamado()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+    Pesquisar
+  </button>
+  <button onclick="limparFiltro()" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">
+    Limpar
+  </button>
+</div>
+
+<!-- TABELA -->
+<div class="bg-white p-4 rounded shadow mb-6 overflow-x-auto">
+<table class="w-full text-sm text-left border-collapse border border-gray-300">
+<thead class="bg-gray-200">
+<tr>
+  <th class="p-2 border border-gray-300">Loja</th>
+  <th class="p-2 border border-gray-300">Chamado</th>
+  <th class="p-2 border border-gray-300">Data</th>
+  <th class="p-2 border border-gray-300">Dias</th>
+  <th class="p-2 border border-gray-300">Status</th>
+  <th class="p-2 border border-gray-300">Tratativa</th>
+  <th class="p-2 border border-gray-300">Foto</th>
+  <th class="p-2 border border-gray-300">Ações</th>
+</tr>
+</thead>
+<tbody id="tabelaChamados"></tbody>
+</table>
+</div>
+
+<script>
+
+let chamados = JSON.parse(localStorage.getItem("chamadosTotem")) || [];
+let editIndex = null;
+
+function salvarLocalStorage() {
+  localStorage.setItem("chamadosTotem", JSON.stringify(chamados));
+}
+
+function calcularDias(data) {
+  let hoje = new Date();
+  let abertura = new Date(data);
+  let diff = hoje - abertura;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function adicionarChamado() {
+
+  let loja = document.getElementById("loja").value;
+  let numero = document.getElementById("numero").value;
+  let data = document.getElementById("data").value;
+  let status = document.getElementById("status").value;
+  let tratativa = document.getElementById("tratativa").value;
+  let fotoInput = document.getElementById("foto");
+
+  if (!loja || !numero || !data) {
+    alert("Preencha os campos obrigatórios!");
+    return;
+  }
+
+  let reader = new FileReader();
+
+  reader.onload = function(e) {
+
+    let chamado = {
+      loja,
+      numero,
+      data,
+      status,
+      tratativa,
+      foto: fotoInput.files[0] ? e.target.result : null
+    };
+
+    if (editIndex !== null) {
+      chamados[editIndex] = chamado;
+      editIndex = null;
+    } else {
+      chamados.push(chamado);
+    }
+
+    salvarLocalStorage();
+    atualizarTabela();
+    limparFormulario();
+  }
+
+  if (fotoInput.files[0]) {
+    reader.readAsDataURL(fotoInput.files[0]);
+  } else {
+    reader.onload({target:{result:null}});
+  }
+}
+
+function atualizarTabela() {
+
+  let tabela = document.getElementById("tabelaChamados");
+  tabela.innerHTML = "";
+
+  chamados.sort((a,b) => new Date(a.data) - new Date(b.data));
+
+  chamados.forEach((c, index) => {
+
+    let dias = calcularDias(c.data);
+
+    let corBotao = "bg-green-600";
+    if (dias > 3 && dias <= 7) corBotao = "bg-yellow-500";
+    if (dias > 7) corBotao = "bg-red-600 animate-pulse";
+
+    tabela.innerHTML += `
+    <tr class="border-b">
+      <td class="p-2 border border-gray-300">${c.loja}</td>
+      <td class="p-2 border border-gray-300">${c.numero}</td>
+      <td class="p-2 border border-gray-300">${c.data}</td>
+      <td class="p-2 border border-gray-300">
+        <button class="text-white px-3 py-1 rounded ${corBotao}" title="Aberto desde ${c.data}">
+          ${dias} dias
+        </button>
+      </td>
+      <td class="p-2 border border-gray-300">${c.status}</td>
+      <td class="p-2 border border-gray-300">${c.tratativa}</td>
+      <td class="p-2 border border-gray-300">
+        ${c.foto ? `<img src="${c.foto}" class="w-20 h-20 object-cover rounded cursor-pointer" onclick="abrirFoto('${c.foto}')">` : "Sem Foto"}
+      </td>
+      <td class="p-2 border border-gray-300 space-x-2">
+        <button onclick="editarChamado(${index})" class="bg-yellow-500 text-white px-2 py-1 rounded">Editar</button>
+        <button onclick="excluirChamado(${index})" class="bg-red-600 text-white px-2 py-1 rounded">Excluir</button>
+      </td>
+    </tr>
+    `;
+  });
+
+  atualizarCards();
+}
+
+function abrirFoto(src) {
+  let w = window.open("");
+  w.document.write(`<img src="${src}" style="width:100%;height:auto;">`);
+}
+
+function atualizarCards() {
+  document.getElementById("totalChamados").innerText = chamados.length;
+
+  let sla = chamados.filter(c => calcularDias(c.data) > 3 && c.status !== "Finalizado").length;
+  document.getElementById("slaEstourado").innerText = sla;
+
+  document.getElementById("emAndamento").innerText =
+    chamados.filter(c => c.status === "Em Andamento").length;
+
+  document.getElementById("finalizados").innerText =
+    chamados.filter(c => c.status === "Finalizado").length;
+}
+
+function editarChamado(index) {
+  let c = chamados[index];
+
+  document.getElementById("loja").value = c.loja;
+  document.getElementById("numero").value = c.numero;
+  document.getElementById("data").value = c.data;
+  document.getElementById("status").value = c.status;
+  document.getElementById("tratativa").value = c.tratativa;
+
+  editIndex = index;
+}
+
+function excluirChamado(index) {
+  if (!confirm("Tem certeza que deseja excluir este chamado?")) return;
+  chamados.splice(index, 1);
+  salvarLocalStorage();
+  atualizarTabela();
+}
+
+function limparFormulario() {
+  document.getElementById("loja").value = "";
+  document.getElementById("numero").value = "";
+  document.getElementById("data").value = "";
+  document.getElementById("tratativa").value = "";
+  document.getElementById("foto").value = "";
+  editIndex = null;
+}
+
+function exportarExcel() {
+
+  let dados = chamados.map(c => ({
+    Loja: c.loja,
+    Chamado: c.numero,
+    Data: c.data,
+    Dias: calcularDias(c.data),
+    Status: c.status,
+    Tratativa: c.tratativa,
+    Foto: c.foto ? "Sim" : "Não"
+  }));
+
+  let ws = XLSX.utils.json_to_sheet(dados);
+  let wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Chamados");
+
+  XLSX.writeFile(wb, "chamados_totem.xlsx");
+}
+
+// ----------------- PESQUISA -----------------
+function pesquisarChamado() {
+  let termo = document.getElementById("filtroPesquisa").value.toLowerCase();
+  let statusFiltro = document.getElementById("filtroStatus").value;
+
+  let tabela = document.getElementById("tabelaChamados");
+  tabela.innerHTML = "";
+
+  chamados.forEach((c, index) => {
+    if ((termo && !c.loja.toLowerCase().includes(termo) && !c.numero.toLowerCase().includes(termo))) return;
+    if (statusFiltro && c.status !== statusFiltro) return;
+
+    let dias = calcularDias(c.data);
+
+    let corBotao = "bg-green-600";
+    if (dias > 3 && dias <= 7) corBotao = "bg-yellow-500";
+    if (dias > 7) corBotao = "bg-red-600 animate-pulse";
+
+    tabela.innerHTML += `
+    <tr class="border-b">
+      <td class="p-2 border border-gray-300">${c.loja}</td>
+      <td class="p-2 border border-gray-300">${c.numero}</td>
+      <td class="p-2 border border-gray-300">${c.data}</td>
+      <td class="p-2 border border-gray-300">
+        <button class="text-white px-3 py-1 rounded ${corBotao}" title="Aberto desde ${c.data}">
+          ${dias} dias
+        </button>
+      </td>
+      <td class="p-2 border border-gray-300">${c.status}</td>
+      <td class="p-2 border border-gray-300">${c.tratativa}</td>
+      <td class="p-2 border border-gray-300">
+        ${c.foto ? `<img src="${c.foto}" class="w-20 h-20 object-cover rounded cursor-pointer" onclick="abrirFoto('${c.foto}')">` : "Sem Foto"}
+      </td>
+      <td class="p-2 border border-gray-300 space-x-2">
+        <button onclick="editarChamado(${index})" class="bg-yellow-500 text-white px-2 py-1 rounded">Editar</button>
+        <button onclick="excluirChamado(${index})" class="bg-red-600 text-white px-2 py-1 rounded">Excluir</button>
+      </td>
+    </tr>
+    `;
+  });
+}
+
+function limparFiltro() {
+  document.getElementById("filtroPesquisa").value = "";
+  document.getElementById("filtroStatus").value = "";
+  atualizarTabela();
+}
+
+// ----------------- INICIALIZAÇÃO -----------------
+atualizarTabela();
+
+</script>
+
+</body>
+</html>
